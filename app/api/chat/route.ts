@@ -1,7 +1,8 @@
-import { streamText, UIMessage, convertToModelMessages, tool } from "ai";
+import { streamText, UIMessage, convertToModelMessages, tool, stepCountIs } from "ai";
 import { google } from "@ai-sdk/google";
 import z from "zod";
-import { SYSTEM_PROMPT } from "@/prompt";
+import { SCHEMA, SYSTEM_PROMPT } from "@/constants";
+import { db } from "@/app/db/db";
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
@@ -10,6 +11,7 @@ export async function POST(req: Request) {
     model: google("gemini-2.5-flash"),
     messages: await convertToModelMessages(messages),
     system: SYSTEM_PROMPT,
+    stopWhen: stepCountIs(5),
     tools: {
       db: tool({
         description: "Call this tool to query the database",
@@ -19,9 +21,16 @@ export async function POST(req: Request) {
             .describe("The SQL query to execute against the database"),
         }),
         execute: async ({ query }) => {
-          // Mock database query execution
-
-          return `Results for query: ${query}`;
+          console.log("DB tool called with query:", query);
+          const result = await db.run(query);
+          return result;
+        },
+      }),
+      schema: tool({
+        description: "Call this tool to get the database schema",
+        execute: async () => {
+          console.log("Schema tool called");
+          return SCHEMA;
         },
       }),
     },
